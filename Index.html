@@ -1,568 +1,411 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sarpras Pesantren</title>
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
+
+// --- Konfigurasi Firebase ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'sarpras-pesantren-skm';
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [inventory, setInventory] = useState([]);
+  const [categories, setCategories] = useState(["Sarana", "Media", "Perpustakaan", "Kebersihan"]);
+  const [history, setHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState('katalog');
+  const [activeCat, setActiveCat] = useState('Semua');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [cart, setCart] = useState([]);
+  const [isLoginModal, setIsLoginModal] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Form State
+  const [newItem, setNewItem] = useState({ nama: '', stok: '', kategori: 'Sarana', foto: '' });
+  const [newCat, setNewCat] = useState("");
+  const [userName, setUserName] = useState("");
+  const [pin, setPin] = useState("");
+  const fileInputRef = useRef(null);
+
+  // --- Auth & Data Fetching ---
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const dataDoc = doc(db, 'artifacts', appId, 'public', 'mainData');
+    const unsubData = onSnapshot(dataDoc, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setInventory(data.inventory || []);
+        setCategories(data.categories || ["Sarana", "Media", "Perpustakaan", "Kebersihan"]);
+      } else {
+        setDoc(dataDoc, { inventory: [], categories: ["Sarana", "Media", "Perpustakaan", "Kebersihan"] });
+      }
+    }, (err) => console.error("Firestore Error:", err));
+
+    const historyDoc = doc(db, 'artifacts', appId, 'public', 'usageHistory');
+    const unsubHist = onSnapshot(historyDoc, (docSnap) => {
+      if (docSnap.exists()) {
+        setHistory(docSnap.data().logs || []);
+      } else {
+        setDoc(historyDoc, { logs: [] });
+      }
+    }, (err) => console.error("Firestore Error:", err));
+
+    return () => {
+      unsubData();
+      unsubHist();
+    };
+  }, [user]);
+
+  // --- Logic Functions ---
+  const handleAddItem = async () => {
+    if (!newItem.nama || !newItem.stok) return;
+    const updatedInv = [...inventory, { ...newItem, id: Date.now(), stok: parseInt(newItem.stok) }];
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { inventory: updatedInv });
+    setNewItem({ nama: '', stok: '', kategori: categories[0], foto: '' });
+    setActiveTab('katalog');
+  };
+
+  const handleDeleteItem = async (itemId) => {
+    // Konfirmasi hapus sederhana menggunakan state atau konfirmasi internal
+    const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus barang ini secara permanen dari Cloud?");
+    if (confirmDelete) {
+      const updatedInv = inventory.filter(item => item.id !== itemId);
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { inventory: updatedInv });
+    }
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCat || categories.includes(newCat)) return;
+    const updatedCats = [...categories, newCat];
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { categories: updatedCats });
+    setNewCat("");
+  };
+
+  const handleUsage = async () => {
+    if (!userName || cart.length === 0) return;
     
-    <!-- PWA Meta Tags -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#059669">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3067/3067451.png">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f3f4f6; color: #1f2937; -webkit-tap-highlight-color: transparent; }
-        .product-card { transition: all 0.2s ease; border-radius: 20px; overflow: hidden; background: white; border: 1px solid #e5e7eb; }
-        .product-card:active { transform: scale(0.95); }
-        .img-box { width: 100%; aspect-ratio: 1/1; background-color: #f9fafb; overflow: hidden; position: relative; }
-        .img-box img { width: 100%; height: 100%; object-fit: cover; }
-        .badge-category { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); backdrop-filter: blur(4px); padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 700; color: #065f46; border: 1px solid rgba(0,0,0,0.05); }
-        .btn-primary { background: linear-gradient(135deg, #059669 0%, #047857 100%); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .modal-animate { animation: slideUp 0.3s ease-out; }
-        
-        /* PWA Install Banner Style */
-        #pwa-banner { display: none; position: fixed; bottom: 20px; left: 20px; right: 20px; z-index: 999; }
-    </style>
-</head>
-<body class="pb-24">
+    let updatedInv = [...inventory];
+    let logs = [];
 
-    <!-- PWA Install Prompt -->
-    <div id="pwa-banner" class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-2xl border border-white/10">
-        <div class="flex items-center gap-3">
-            <span class="text-2xl">📱</span>
-            <div class="text-[11px]">
-                <p class="font-bold">Pasang Aplikasi</p>
-                <p class="text-gray-400">Akses lebih cepat dari beranda</p>
-            </div>
-        </div>
-        <button onclick="installApp()" class="bg-emerald-500 px-4 py-2 rounded-xl text-xs font-black">INSTALL</button>
-    </div>
-
-    <!-- Header & Navigation -->
-    <header class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div>
-                <h1 class="text-xl font-extrabold text-emerald-800 tracking-tight flex items-center gap-2">
-                    <span>🔧</span> SARPRAS <span class="text-emerald-500 font-light text-[10px] bg-emerald-50 px-2 py-0.5 rounded-full">v7.0</span>
-                </h1>
-                <div id="admin-status" class="text-[10px] font-bold text-gray-400 mt-0.5 flex items-center gap-1">
-                    <span class="w-2 h-2 rounded-full bg-gray-300" id="status-dot"></span> 
-                    <span id="status-text">Mode Tamu (Read-Only)</span>
-                </div>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="openLogin()" id="login-btn" class="p-2.5 bg-gray-100 rounded-2xl text-gray-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                </button>
-                <button onclick="toggleCart()" class="relative p-2.5 bg-emerald-50 rounded-2xl text-emerald-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span id="cart-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-5 h-5 flex items-center justify-center rounded-full font-bold hidden border-2 border-white">0</span>
-                </button>
-            </div>
-        </div>
-        
-        <div class="container mx-auto px-4 pb-3 space-y-3">
-            <div class="relative">
-                <input type="text" id="search-input" oninput="handleSearch()" placeholder="Cari barang atau kategori..." class="w-full pl-10 pr-4 py-3 bg-gray-100 rounded-2xl text-sm border-none focus:ring-2 focus:ring-emerald-500 outline-none">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute left-3.5 top-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-            </div>
-            <div class="flex overflow-x-auto gap-2 no-scrollbar pb-1" id="category-chips"></div>
-        </div>
-
-        <!-- Tab Navbar -->
-        <div class="container mx-auto px-4 flex gap-8 text-[11px] font-black uppercase tracking-wider border-t bg-white">
-            <button onclick="switchTab('katalog')" id="t-katalog" class="py-4 border-b-4 border-emerald-600 text-emerald-700">Katalog</button>
-            <button onclick="switchTab('riwayat')" id="t-riwayat" class="py-4 text-gray-400">Riwayat</button>
-            <button onclick="switchTab('admin')" id="t-admin" class="py-4 text-gray-400 hidden">Admin Panel</button>
-        </div>
-    </header>
-
-    <main class="container mx-auto px-4 py-6">
-        <!-- Tab: Katalog -->
-        <section id="s-katalog">
-            <div id="katalog-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
-            <div id="no-result" class="hidden text-center py-24">
-                <p class="text-4xl mb-4">🌵</p>
-                <p class="text-gray-400 font-bold">Barang tidak ditemukan.</p>
-            </div>
-        </section>
-
-        <!-- Tab: Riwayat -->
-        <section id="s-riwayat" class="hidden">
-            <div class="bg-white rounded-[24px] shadow-sm border overflow-hidden">
-                <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
-                    <h3 class="font-black text-gray-700 uppercase text-xs tracking-widest">Aktivitas Terakhir</h3>
-                    <button onclick="clearHistory()" id="clear-history-btn" class="hidden text-[10px] bg-red-50 text-red-500 px-3 py-1 rounded-full font-bold">Hapus Semua</button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-gray-50 text-[9px] uppercase font-black text-gray-400 tracking-widest border-b">
-                            <tr>
-                                <th class="p-5">Tanggal</th>
-                                <th class="p-5">Barang</th>
-                                <th class="p-5 text-center">Qty</th>
-                                <th class="p-5">Pemakai</th>
-                            </tr>
-                        </thead>
-                        <tbody id="riwayat-list" class="divide-y divide-gray-100"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- Tab: Admin Panel -->
-        <section id="s-admin" class="hidden max-w-xl mx-auto space-y-6">
-            <!-- Manage Categories -->
-            <div class="bg-white p-6 rounded-[32px] border shadow-sm">
-                <h2 class="text-sm font-black mb-4 uppercase tracking-widest text-indigo-600 flex items-center gap-2">
-                    <span class="w-6 h-6 bg-indigo-50 flex items-center justify-center rounded-lg">📂</span> Kelola Kelompok
-                </h2>
-                <div class="flex gap-2">
-                    <input type="text" id="new-cat-input" placeholder="Nama kelompok baru..." class="flex-grow p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm">
-                    <button onclick="addNewCategory()" class="px-6 bg-indigo-600 text-white font-bold rounded-2xl">Tambah</button>
-                </div>
-                <div class="flex flex-wrap gap-2 mt-4" id="manage-cats-list"></div>
-            </div>
-
-            <!-- Add Item -->
-            <div class="bg-white p-6 rounded-[32px] border shadow-sm">
-                <h2 class="text-sm font-black mb-6 uppercase tracking-widest text-emerald-600 flex items-center gap-2">
-                    <span class="w-6 h-6 bg-emerald-50 flex items-center justify-center rounded-lg">➕</span> Tambah Barang
-                </h2>
-                <div class="space-y-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="space-y-4">
-                            <div>
-                                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Nama Barang</label>
-                                <input type="text" id="add-nama" class="w-full mt-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Stok</label>
-                                    <input type="number" id="add-stok" class="w-full mt-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Kelompok</label>
-                                    <select id="add-kategori" class="w-full mt-1 p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none appearance-none"></select>
-                                </div>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Foto Barang</label>
-                            <label for="file-input" class="mt-1 flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-200 rounded-[24px] cursor-pointer bg-gray-50 hover:bg-emerald-50 transition relative overflow-hidden">
-                                <div id="preview-wrapper" class="absolute inset-0 hidden">
-                                    <img id="image-preview" class="w-full h-full object-cover">
-                                    <button onclick="resetImage(event)" class="absolute top-2 right-2 bg-red-500 text-white text-[8px] px-2 py-1 rounded-full font-bold">HAPUS</button>
-                                </div>
-                                <div id="upload-hint" class="text-center p-4">
-                                    <p class="text-2xl mb-1">📸</p>
-                                    <p class="text-[9px] font-bold text-gray-400 uppercase">Ambil Foto</p>
-                                </div>
-                                <input id="file-input" type="file" accept="image/*" class="hidden" onchange="processImage(this)" />
-                            </label>
-                        </div>
-                    </div>
-                    <button onclick="addItem()" class="w-full btn-primary text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-lg shadow-emerald-100">Simpan Barang</button>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Side Panel: Checkout -->
-    <div id="cart-panel" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden flex justify-end">
-        <div class="bg-white w-full max-w-sm h-full p-6 flex flex-col modal-animate">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-xl font-black">📋 List Pakai</h2>
-                <button onclick="toggleCart()" class="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-full text-lg">✕</button>
-            </div>
-            <div id="cart-list" class="flex-grow space-y-4 overflow-y-auto no-scrollbar"></div>
-            <div class="mt-6 border-t pt-6 space-y-4">
-                <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase">Siapa yang pakai?</label>
-                    <input type="text" id="user-name" placeholder="Nama Santri / Pengurus" class="w-full mt-1.5 p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                </div>
-                <button onclick="submitUsage()" class="w-full btn-primary text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl">Konfirmasi</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Login Modal -->
-    <div id="login-modal" class="fixed inset-0 bg-black/80 backdrop-blur-xl z-[200] hidden flex items-center justify-center p-6">
-        <div class="bg-white w-full max-w-xs p-8 rounded-[40px] text-center modal-animate">
-            <div class="w-20 h-20 bg-emerald-50 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6">🔐</div>
-            <h2 class="text-lg font-black mb-2">Login Petugas</h2>
-            <p class="text-[10px] text-gray-400 mb-8 uppercase font-bold tracking-widest">Akses Manajemen Barang</p>
-            <input type="password" id="pin-input" class="w-full p-5 bg-gray-100 rounded-2xl text-center text-2xl tracking-[15px] mb-8 outline-none border-2 border-transparent focus:border-emerald-500 transition" placeholder="••••">
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="closeLogin()" class="p-4 bg-gray-100 rounded-2xl font-bold text-gray-400 text-xs uppercase">Batal</button>
-                <button onclick="verifyLogin()" class="p-4 btn-primary text-white rounded-2xl font-bold text-xs uppercase">Masuk</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900/95 text-white px-6 py-3 rounded-full text-[11px] font-bold hidden z-[300] shadow-2xl flex items-center gap-2"></div>
-
-    <script>
-        // --- State ---
-        let categories = JSON.parse(localStorage.getItem('v7_cats')) || ["Sarana", "Media", "Perpustakaan", "Kesenian", "Kebersihan", "Kemesjidan", "KDK", "Poskestren"];
-        let inventory = JSON.parse(localStorage.getItem('v7_db')) || [];
-        let history = JSON.parse(localStorage.getItem('v7_hist')) || [];
-        let cart = [];
-        let activeCategory = "Semua";
-        let isAdmin = false;
-        let tempBase64 = "";
-        const PIN = "1234";
-
-        // --- PWA Helper ---
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            document.getElementById('pwa-banner').style.display = 'flex';
+    cart.forEach(item => {
+      const idx = updatedInv.findIndex(i => i.id === item.id);
+      if (idx !== -1) {
+        updatedInv[idx].stok -= item.qty;
+        logs.push({
+          id: Date.now() + Math.random(),
+          tgl: new Date().toLocaleString('id-ID'),
+          nama: item.nama,
+          qty: item.qty,
+          user: userName
         });
+      }
+    });
 
-        async function installApp() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    document.getElementById('pwa-banner').style.display = 'none';
-                }
-                deferredPrompt = null;
-            }
-        }
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { inventory: updatedInv });
+    const histDoc = doc(db, 'artifacts', appId, 'public', 'usageHistory');
+    const snap = await getDoc(histDoc);
+    const currentHist = snap.data()?.logs || [];
+    await updateDoc(histDoc, { logs: [...logs, ...currentHist].slice(0, 100) });
 
-        // --- Init ---
-        function init() {
-            renderChips();
-            renderCategorySelect();
-            renderKatalog();
-            updateAdminUI();
-        }
+    setCart([]);
+    setUserName("");
+    setIsCartOpen(false);
+  };
 
-        function switchTab(t) {
-            ['katalog', 'riwayat', 'admin'].forEach(tab => {
-                document.getElementById('s-' + tab).classList.add('hidden');
-                document.getElementById('t-' + tab).className = "py-4 text-gray-400 font-black uppercase tracking-wider";
-            });
-            document.getElementById('s-' + t).classList.remove('hidden');
-            document.getElementById('t-' + t).className = "py-4 border-b-4 border-emerald-600 text-emerald-700 font-black uppercase tracking-wider";
-            if(t === 'riwayat') renderRiwayat();
-        }
+  const processImage = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.src = ev.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const scale = 300 / Math.max(img.width, img.height);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          setNewItem({ ...newItem, foto: canvas.toDataURL('image/jpeg', 0.7) });
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-        // --- Security ---
-        function openLogin() {
-            if(isAdmin) {
-                isAdmin = false;
-                updateAdminUI();
-                showToast("🔓 Log Out Berhasil");
-            } else {
-                document.getElementById('login-modal').classList.remove('hidden');
-                document.getElementById('pin-input').focus();
-            }
-        }
-        function closeLogin() { document.getElementById('login-modal').classList.add('hidden'); }
-        function verifyLogin() {
-            if(document.getElementById('pin-input').value === PIN) {
-                isAdmin = true;
-                updateAdminUI();
-                closeLogin();
-                document.getElementById('pin-input').value = "";
-                showToast("✅ Welcome Admin");
-            } else {
-                showToast("❌ PIN Salah");
-            }
-        }
-        function updateAdminUI() {
-            const el = {
-                tab: document.getElementById('t-admin'),
-                dot: document.getElementById('status-dot'),
-                txt: document.getElementById('status-text'),
-                btn: document.getElementById('login-btn'),
-                clr: document.getElementById('clear-history-btn')
-            };
-            if(isAdmin) {
-                el.tab.classList.remove('hidden');
-                el.dot.className = "w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]";
-                el.txt.innerText = "Mode Petugas";
-                el.btn.className = "p-2.5 bg-emerald-100 rounded-2xl text-emerald-700";
-                el.clr.classList.remove('hidden');
-            } else {
-                el.tab.classList.add('hidden');
-                el.dot.className = "w-2 h-2 rounded-full bg-gray-300";
-                el.txt.innerText = "Mode Tamu (Read-Only)";
-                el.btn.className = "p-2.5 bg-gray-100 rounded-2xl text-gray-600";
-                el.clr.classList.add('hidden');
-                if(!document.getElementById('s-admin').classList.contains('hidden')) switchTab('katalog');
-            }
-        }
+  const filteredInv = inventory.filter(i => 
+    (activeCat === 'Semua' || i.kategori === activeCat) &&
+    (i.nama.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
-        // --- Categories ---
-        function renderChips() {
-            const container = document.getElementById('category-chips');
-            const list = ["Semua", ...categories];
-            container.innerHTML = list.map(c => `
-                <button onclick="filterCat('${c}')" class="px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === c ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-white text-gray-400 border border-gray-100'}">
-                    ${c}
-                </button>
-            `).join('');
-            
-            const manager = document.getElementById('manage-cats-list');
-            manager.innerHTML = categories.map(c => `
-                <div class="flex items-center gap-2 bg-gray-50 border px-3 py-1.5 rounded-xl">
-                    <span class="text-[10px] font-black text-gray-500 uppercase">${c}</span>
-                    <button onclick="deleteCategory('${c}')" class="text-red-400 font-bold ml-1 text-xs">✕</button>
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-20 font-sans">
+      {/* Header */}
+      <header className="bg-white border-b sticky top-0 z-40 px-4 py-4 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-xl font-black text-emerald-700 tracking-tighter flex items-center gap-2">
+              <span className="bg-emerald-100 p-1.5 rounded-lg text-lg">🏪</span> SARPRAS SKM
+            </h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              {isAdmin ? "🟢 MODE PETUGAS (CLOUD)" : "⚪ MODE TAMU (LIHAT SAJA)"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setIsLoginModal(true)} className={`p-2.5 rounded-2xl transition ${isAdmin ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            </button>
+            <button onClick={() => setIsCartOpen(true)} className="relative p-2.5 bg-emerald-600 text-white rounded-2xl shadow-lg">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{cart.length}</span>}
+            </button>
+          </div>
+        </div>
+
+        <input 
+          type="text" 
+          placeholder="Cari alat atau bahan..." 
+          className="w-full p-3.5 bg-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition border-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        
+        <div className="flex gap-2 overflow-x-auto no-scrollbar py-3 mt-1">
+          {["Semua", ...categories].map(c => (
+            <button 
+              key={c}
+              onClick={() => setActiveCat(c)}
+              className={`px-5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition ${activeCat === c ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border text-slate-400'}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <nav className="flex px-4 bg-white border-b text-[11px] font-black uppercase tracking-[0.1em]">
+        <button onClick={() => setActiveTab('katalog')} className={`flex-1 py-4 border-b-4 transition ${activeTab === 'katalog' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-300'}`}>📦 Katalog</button>
+        <button onClick={() => setActiveTab('riwayat')} className={`flex-1 py-4 border-b-4 transition ${activeTab === 'riwayat' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-300'}`}>📜 Riwayat</button>
+        {isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex-1 py-4 border-b-4 transition ${activeTab === 'admin' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-300'}`}>➕ Kelola</button>}
+      </nav>
+
+      {/* Main Content */}
+      <main className="p-4 max-w-5xl mx-auto">
+        {activeTab === 'katalog' && (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {filteredInv.map(item => (
+              <div key={item.id} className="bg-white rounded-[24px] border overflow-hidden flex flex-col shadow-sm relative group">
+                {/* TOMBOL HAPUS (Hanya muncul jika Admin) */}
+                {isAdmin && (
+                  <button 
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="absolute top-2 right-2 z-10 p-2 bg-red-500 text-white rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                )}
+                
+                <div className="aspect-square bg-slate-50 relative">
+                  <span className="absolute top-2 left-2 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg text-[9px] font-black text-emerald-700 shadow-sm border uppercase">{item.kategori}</span>
+                  <img src={item.foto || 'https://via.placeholder.com/200?text=Barang'} className="w-full h-full object-cover" />
                 </div>
-            `).join('');
-        }
+                <div className="p-3 flex flex-col flex-grow">
+                  <h3 className="text-[11px] font-extrabold uppercase line-clamp-2 h-7 mb-1 text-slate-700 tracking-tight">{item.nama}</h3>
+                  <p className={`text-[10px] font-black ${item.stok <= 3 ? 'text-red-500' : 'text-emerald-500'}`}>STOK: {item.stok}</p>
+                  <button 
+                    disabled={item.stok <= 0}
+                    onClick={() => {
+                      const existing = cart.find(c => c.id === item.id);
+                      if (existing) {
+                        setCart(cart.map(c => c.id === item.id ? {...c, qty: c.qty + 1} : c));
+                      } else {
+                        setCart([...cart, {...item, qty: 1}]);
+                      }
+                    }}
+                    className="mt-3 w-full bg-slate-900 text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest disabled:bg-slate-200"
+                  >
+                    PAKAI
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        function filterCat(c) {
-            activeCategory = c;
-            renderChips();
-            renderKatalog();
-        }
+        {activeTab === 'riwayat' && (
+          <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
+            <div className="p-4 bg-slate-50 border-b">
+              <h2 className="text-xs font-black uppercase tracking-widest">Aktivitas Cloud Terkini</h2>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {history.length === 0 && <div className="p-10 text-center text-slate-300 italic text-sm">Belum ada aktivitas tercatat.</div>}
+              {history.map(log => (
+                <div key={log.id} className="p-4 flex justify-between items-center">
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-700 uppercase">{log.nama}</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">{log.tgl} • Oleh: {log.user}</p>
+                  </div>
+                  <span className="bg-red-50 text-red-600 font-black text-xs px-3 py-1 rounded-full">-{log.qty}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-        function addNewCategory() {
-            const val = document.getElementById('new-cat-input').value.trim();
-            if(!val || categories.includes(val)) return;
-            categories.push(val);
-            save();
-            renderChips();
-            renderCategorySelect();
-            document.getElementById('new-cat-input').value = "";
-            showToast("✨ Kelompok '" + val + "' Ditambahkan");
-        }
-
-        function deleteCategory(c) {
-            if(confirm("Hapus kategori ini?")) {
-                categories = categories.filter(x => x !== c);
-                save();
-                renderChips();
-                renderCategorySelect();
-            }
-        }
-
-        function renderCategorySelect() {
-            const s = document.getElementById('add-kategori');
-            s.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
-        }
-
-        // --- Catalog ---
-        function renderKatalog(q = "") {
-            const grid = document.getElementById('katalog-grid');
-            const no = document.getElementById('no-result');
-            grid.innerHTML = '';
-            
-            let filtered = inventory;
-            if(activeCategory !== "Semua") filtered = filtered.filter(i => i.kategori === activeCategory);
-            if(q) filtered = filtered.filter(i => i.nama.toLowerCase().includes(q.toLowerCase()));
-
-            if(filtered.length === 0) no.classList.remove('hidden');
-            else {
-                no.classList.add('hidden');
-                filtered.forEach(item => {
-                    grid.innerHTML += `
-                        <div class="product-card flex flex-col shadow-sm">
-                            <div class="img-box">
-                                <span class="badge-category uppercase">${item.kategori}</span>
-                                <img src="${item.foto}" onerror="this.src='https://via.placeholder.com/400?text=No+Photo'">
-                            </div>
-                            <div class="p-4 flex flex-col flex-grow">
-                                <h3 class="text-[10px] font-black text-gray-800 line-clamp-2 h-7 leading-tight mb-2 uppercase tracking-tight">${item.nama}</h3>
-                                <div class="text-[10px] font-black ${item.stok === 0 ? 'text-red-500' : 'text-emerald-600'}">
-                                    STOK: ${item.stok}
-                                </div>
-                                <button onclick="addToCart(${item.id})" class="mt-4 w-full bg-emerald-50 text-emerald-700 text-[9px] font-black py-3 rounded-xl uppercase tracking-widest active:scale-95 transition">Pakai</button>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-        }
-
-        function addItem() {
-            const n = document.getElementById('add-nama').value;
-            const s = parseInt(document.getElementById('add-stok').value);
-            const k = document.getElementById('add-kategori').value;
-            if(!n || isNaN(s)) return showToast("⚠️ Isi Nama & Stok");
-            
-            inventory.push({
-                id: Date.now(),
-                nama: n,
-                stok: s,
-                kategori: k,
-                foto: tempBase64 || 'https://via.placeholder.com/400?text=Barang'
-            });
-            save();
-            resetForm();
-            switchTab('katalog');
-            showToast("✅ Barang Berhasil Disimpan");
-        }
-
-        function resetForm() {
-            document.getElementById('add-nama').value = "";
-            document.getElementById('add-stok').value = "";
-            resetImage();
-        }
-
-        // --- Utils & Handlers ---
-        function processImage(input) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = function() {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        const max = 400;
-                        const scale = max / Math.max(img.width, img.height);
-                        canvas.width = img.width * scale;
-                        canvas.height = img.height * scale;
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        tempBase64 = canvas.toDataURL('image/jpeg', 0.6);
-                        document.getElementById('image-preview').src = tempBase64;
-                        document.getElementById('preview-wrapper').classList.remove('hidden');
-                        document.getElementById('upload-hint').classList.add('hidden');
-                    }
-                };
-                reader.readAsDataURL(input.files[0]);
-            }
-        }
-
-        function resetImage(e) {
-            if(e) e.preventDefault();
-            tempBase64 = "";
-            document.getElementById('preview-wrapper').classList.add('hidden');
-            document.getElementById('upload-hint').classList.remove('hidden');
-            document.getElementById('file-input').value = "";
-        }
-
-        function addToCart(id) {
-            const item = inventory.find(i => i.id === id);
-            if(item.stok <= 0) return showToast("❌ Stok Habis");
-            
-            const existing = cart.find(c => c.id === id);
-            if(existing) {
-                if(existing.qty < item.stok) existing.qty++;
-                else return showToast("⚠️ Stok Maksimum");
-            } else {
-                cart.push({...item, qty: 1});
-            }
-            updateCartUI();
-            showToast("🛒 Ditambah ke List");
-        }
-
-        function updateCartUI() {
-            const b = document.getElementById('cart-badge');
-            b.innerText = cart.length;
-            b.classList.toggle('hidden', cart.length === 0);
-            
-            const l = document.getElementById('cart-list');
-            l.innerHTML = cart.length === 0 ? '<div class="text-center py-20 text-gray-300 font-bold uppercase text-[10px] tracking-widest">Kosong</div>' : '';
-            cart.forEach((c, i) => {
-                l.innerHTML += `
-                    <div class="flex items-center gap-4 bg-gray-50 p-4 rounded-3xl border border-gray-100">
-                        <img src="${c.foto}" class="w-12 h-12 object-cover rounded-2xl">
-                        <div class="flex-grow">
-                            <h4 class="text-[10px] font-black uppercase leading-tight">${c.nama}</h4>
-                            <p class="text-[9px] font-bold text-gray-400">JUMLAH: ${c.qty}</p>
-                        </div>
-                        <div class="flex gap-1">
-                            <button onclick="adjQty(${i}, -1)" class="w-7 h-7 bg-white rounded-lg border font-bold text-xs">-</button>
-                            <button onclick="adjQty(${i}, 1)" class="w-7 h-7 bg-white rounded-lg border font-bold text-xs">+</button>
-                        </div>
+        {activeTab === 'admin' && (
+          <div className="space-y-6 max-w-2xl mx-auto animate-up">
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm">
+              <h2 className="text-sm font-black mb-6 uppercase tracking-widest text-emerald-600 flex items-center gap-2">
+                <span>➕</span> Tambah Barang Ke Cloud
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nama Barang</label>
+                    <input type="text" value={newItem.nama} onChange={e => setNewItem({...newItem, nama: e.target.value})} className="w-full mt-1 p-3.5 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm" placeholder="Contoh: Lampu LED 10W" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Stok Awal</label>
+                      <input type="number" value={newItem.stok} onChange={e => setNewItem({...newItem, stok: e.target.value})} className="w-full mt-1 p-3.5 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
                     </div>
-                `;
-            });
-        }
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Kategori</label>
+                      <select value={newItem.kategori} onChange={e => setNewItem({...newItem, kategori: e.target.value})} className="w-full mt-1 p-3.5 bg-slate-50 border rounded-2xl outline-none text-sm appearance-none bg-white">
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Unggah Foto</label>
+                  <div onClick={() => fileInputRef.current.click()} className="flex-grow min-h-[140px] border-2 border-dashed rounded-[24px] flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-emerald-50 transition overflow-hidden border-slate-200">
+                    {newItem.foto ? <img src={newItem.foto} className="w-full h-full object-cover" /> : <div className="text-center"><span className="text-2xl opacity-30">📷</span><p className="text-[9px] font-bold text-slate-400 mt-2">KLIK UNTUK FOTO</p></div>}
+                  </div>
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={processImage} />
+                </div>
+              </div>
+              <button onClick={handleAddItem} className="w-full mt-6 bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-emerald-100 active:scale-95 transition">SIMPAN KE DATABASE</button>
+            </div>
 
-        function adjQty(idx, v) {
-            const inv = inventory.find(x => x.id === cart[idx].id);
-            if(v === 1 && cart[idx].qty >= inv.stok) return;
-            cart[idx].qty += v;
-            if(cart[idx].qty <= 0) cart.splice(idx, 1);
-            updateCartUI();
-        }
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm">
+              <h2 className="text-sm font-black mb-4 uppercase tracking-widest text-indigo-600">Tambah Kategori Baru</h2>
+              <div className="flex gap-2">
+                <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Misal: Alat Listrik" className="flex-grow p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm" />
+                <button onClick={handleAddCategory} className="px-6 bg-indigo-600 text-white font-bold rounded-2xl">Tambah</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
 
-        function submitUsage() {
-            const user = document.getElementById('user-name').value;
-            if(!user || cart.length === 0) return showToast("⚠️ Nama pemakai belum diisi");
-            
-            cart.forEach(c => {
-                const item = inventory.find(i => i.id === c.id);
-                item.stok -= c.qty;
-                history.unshift({
-                    tgl: new Date().toLocaleString('id-ID', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}),
-                    nama: item.nama,
-                    qty: c.qty,
-                    user: user
-                });
-            });
-            
-            cart = [];
-            document.getElementById('user-name').value = "";
-            save();
-            updateCartUI();
-            toggleCart();
-            renderKatalog();
-            showToast("✅ Berhasil Dilaporkan");
-        }
+      {/* Cart Modal */}
+      {isCartOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-end">
+          <div className="bg-white w-full max-w-md h-full p-6 flex flex-col shadow-2xl animate-slide-left">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl font-black tracking-tighter uppercase">📋 Daftar Pengambilan</h2>
+              <button onClick={() => setIsCartOpen(false)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 font-bold hover:bg-red-50 hover:text-red-500 transition">✕</button>
+            </div>
+            <div className="flex-grow overflow-y-auto space-y-4 no-scrollbar">
+              {cart.length === 0 && <p className="text-center text-slate-300 italic text-sm mt-10">Daftar kosong...</p>}
+              {cart.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-4 bg-slate-50 p-4 rounded-[24px] border border-slate-100">
+                  <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border shrink-0">
+                    <img src={item.foto || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-grow">
+                    <h4 className="text-[11px] font-black uppercase leading-tight truncate w-32">{item.nama}</h4>
+                    <p className="text-[10px] font-bold text-emerald-600">JUMLAH: {item.qty}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => {
+                      const updated = [...cart];
+                      if (updated[idx].qty > 1) updated[idx].qty--;
+                      else updated.splice(idx, 1);
+                      setCart(updated);
+                    }} className="w-8 h-8 bg-white border rounded-lg font-bold hover:bg-red-50">-</button>
+                    <button onClick={() => {
+                      const updated = [...cart];
+                      const inv = inventory.find(i => i.id === item.id);
+                      if (updated[idx].qty < inv.stok) updated[idx].qty++;
+                      setCart(updated);
+                    }} className="w-8 h-8 bg-white border rounded-lg font-bold hover:bg-emerald-50">+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 border-t pt-6 space-y-4">
+              <input 
+                type="text" 
+                placeholder="Siapa yang mengambil?" 
+                className="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-bold"
+                value={userName}
+                onChange={e => setUserName(e.target.value)}
+              />
+              <button onClick={handleUsage} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition">KONFIRMASI SEKARANG</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-        function renderRiwayat() {
-            const l = document.getElementById('riwayat-list');
-            l.innerHTML = history.length ? '' : '<tr><td colspan="4" class="p-10 text-center text-gray-400 font-bold uppercase text-[10px]">Belum ada aktivitas</td></tr>';
-            history.forEach(h => {
-                l.innerHTML += `
-                    <tr class="hover:bg-gray-50">
-                        <td class="p-5 text-[9px] text-gray-400 font-bold">${h.tgl}</td>
-                        <td class="p-5 font-black text-gray-700 uppercase text-[10px]">${h.nama}</td>
-                        <td class="p-5 text-center font-black text-red-500 text-[10px]">-${h.qty}</td>
-                        <td class="p-5 font-bold text-gray-500 uppercase text-[10px]">${h.user}</td>
-                    </tr>
-                `;
-            });
-        }
+      {/* Login Modal */}
+      {isLoginModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] text-center shadow-2xl border border-white/20">
+            <div className="text-4xl mb-4">🔐</div>
+            <h2 className="text-lg font-black mb-1 uppercase tracking-tight">Login Petugas</h2>
+            <p className="text-[10px] text-slate-400 mb-8 font-bold uppercase tracking-widest">Masukkan PIN untuk membuka fitur kelola</p>
+            <input 
+              type="password" 
+              placeholder="••••" 
+              className="w-full p-5 bg-slate-100 rounded-3xl text-center text-3xl tracking-[12px] mb-8 outline-none border-2 border-transparent focus:border-emerald-500 transition font-mono"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setIsLoginModal(false)} className="p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-slate-200">BATAL</button>
+              <button onClick={() => {
+                if (pin === "1234") {
+                  setIsAdmin(true);
+                  setIsLoginModal(false);
+                  setPin("");
+                } else {
+                  alert("PIN SALAH!");
+                }
+              }} className="p-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-emerald-900/20">MASUK</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-        function clearHistory() {
-            if(confirm("Hapus semua riwayat pemakaian?")) {
-                history = [];
-                save();
-                renderRiwayat();
-                showToast("🗑️ Riwayat Dihapus");
-            }
-        }
-
-        function save() {
-            localStorage.setItem('v7_cats', JSON.stringify(categories));
-            localStorage.setItem('v7_db', JSON.stringify(inventory));
-            localStorage.setItem('v7_hist', JSON.stringify(history));
-        }
-
-        function handleSearch() { renderKatalog(document.getElementById('search-input').value); }
-        function toggleCart() { document.getElementById('cart-panel').classList.toggle('hidden'); }
-        function showToast(m) {
-            const t = document.getElementById('toast');
-            t.innerText = m;
-            t.classList.remove('hidden');
-            setTimeout(() => t.classList.add('hidden'), 3000);
-        }
-
-        window.onload = init;
-    </script>
-</body>
-</html>
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes slide-left { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .animate-slide-left { animation: slide-left 0.3s ease-out; }
+        @keyframes up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-up { animation: up 0.4s ease-out; }
+      `}</style>
+    </div>
+  );
+}
 
