@@ -2,453 +2,282 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sarpras Pesantren SKM V9</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SARPRAS SKM - Cloud System</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        
-        body { 
-            font-family: 'Plus Jakarta Sans', sans-serif; 
-            background-color: #f1f5f9;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .glass {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .category-pill {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .item-card {
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .item-card:active {
-            transform: scale(0.96);
-        }
-
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        @keyframes slideUp {
-            from { transform: translateY(30px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-slide-up { animation: slideUp 0.4s ease-out forwards; }
+        @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-up { animation: slide-up 0.4s ease-out; }
     </style>
 </head>
-<body class="text-slate-900 pb-28">
+<body class="bg-slate-50 text-slate-800 pb-24">
 
-    <!-- HEADER MEWAH V9 -->
-    <header class="glass sticky top-0 z-50 px-6 py-6 border-b border-white/50">
-        <div class="max-w-5xl mx-auto">
-            <div class="flex justify-between items-center mb-6">
-                <div>
-                    <h1 class="text-2xl font-extrabold tracking-tighter text-emerald-800 flex items-center gap-2">
-                        <span class="bg-emerald-600 text-white p-2 rounded-2xl shadow-lg shadow-emerald-200">🏪</span> 
-                        SARPRAS SKM
-                    </h1>
-                    <div id="status-label" class="flex items-center gap-1.5 mt-1">
-                        <span class="w-2 h-2 rounded-full bg-slate-300 animate-pulse"></span>
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Mode Tamu</span>
-                    </div>
-                </div>
-                <div class="flex gap-3">
-                    <button onclick="openModal('modal-login')" class="w-12 h-12 glass flex items-center justify-center rounded-2xl shadow-sm text-slate-500 active:bg-white transition-all">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                    </button>
-                    <button onclick="openModal('modal-cart')" class="w-12 h-12 bg-emerald-600 flex items-center justify-center rounded-2xl shadow-xl shadow-emerald-200 text-white relative active:scale-90 transition-all">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16 11V7a4 4 0 118 0m-4 5v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zM9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                        <span id="cart-count" class="hidden absolute -top-1 -right-1 bg-red-500 text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-md">0</span>
-                    </button>
-                </div>
+    <header class="bg-white border-b sticky top-0 z-40 px-4 py-4 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-xl font-black text-emerald-700 tracking-tighter flex items-center gap-2">
+                    <span class="bg-emerald-100 p-1.5 rounded-lg text-lg">🏪</span> SARPRAS SKM
+                </h1>
+                <p id="admin-status" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                    ⚪ MODE TAMU (LIHAT SAJA)
+                </p>
             </div>
-            
-            <div class="relative group">
-                <input type="text" id="search-input" oninput="refreshKatalog()" placeholder="Cari alat atau bahan..." class="w-full p-5 pl-14 bg-white/50 border border-white rounded-[24px] text-sm font-semibold outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white transition-all shadow-inner">
-                <svg class="w-6 h-6 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <div class="flex gap-2">
+                <button onclick="toggleModal('login-modal')" class="p-2.5 bg-slate-100 text-slate-500 rounded-2xl transition hover:bg-emerald-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                </button>
+                <button onclick="toggleModal('cart-modal')" class="relative p-2.5 bg-emerald-600 text-white rounded-2xl shadow-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <span id="cart-count" class="hidden absolute -top-1 -right-1 bg-red-500 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">0</span>
+                </button>
             </div>
         </div>
+        <input type="text" id="search-input" placeholder="Cari alat atau bahan..." class="w-full p-3.5 bg-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 border-none">
     </header>
 
-    <!-- KATEGORI BAR -->
-    <div class="max-w-5xl mx-auto px-6 mt-6">
-        <div id="category-list" class="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-            <!-- Kategori akan muncul di sini -->
-        </div>
-    </div>
-
-    <!-- MAIN TAB NAVIGATION -->
-    <nav class="flex max-w-5xl mx-auto px-6 mt-4 gap-6 text-[11px] font-black uppercase tracking-[0.2em]">
-        <button onclick="switchTab('katalog')" id="tab-btn-katalog" class="pb-3 border-b-4 border-emerald-600 text-emerald-800">Katalog</button>
-        <button onclick="switchTab('riwayat')" id="tab-btn-riwayat" class="pb-3 border-b-4 border-transparent text-slate-400">Riwayat</button>
-        <button onclick="switchTab('admin')" id="tab-btn-admin" class="hidden pb-3 border-b-4 border-transparent text-slate-400">Panel Petugas</button>
+    <nav class="flex px-4 bg-white border-b text-[11px] font-black uppercase tracking-widest sticky top-[135px] z-30">
+        <button onclick="switchTab('katalog')" id="tab-katalog" class="flex-1 py-4 border-b-4 border-emerald-600 text-emerald-700">📦 Katalog</button>
+        <button onclick="switchTab('riwayat')" id="tab-riwayat" class="flex-1 py-4 border-b-4 border-transparent text-slate-300">📜 Riwayat</button>
+        <button onclick="switchTab('admin')" id="tab-admin" class="hidden flex-1 py-4 border-b-4 border-transparent text-slate-300">➕ Kelola</button>
     </nav>
 
-    <!-- CONTENT AREA -->
-    <main class="max-w-5xl mx-auto px-6 py-6">
-        
-        <!-- KATALOG GRID -->
-        <div id="content-katalog" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-5 animate-slide-up">
-            <!-- Item muncul di sini -->
+    <main class="p-4 max-w-5xl mx-auto">
+        <div id="section-katalog" class="grid grid-cols-2 md:grid-cols-4 gap-4 animate-up">
+            <p class="col-span-full text-center py-10 text-slate-400 italic">Memuat data inventaris...</p>
         </div>
 
-        <!-- RIWAYAT LIST -->
-        <div id="content-riwayat" class="hidden space-y-4 animate-slide-up">
-            <div class="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
-                <div id="history-container" class="divide-y divide-slate-50">
-                    <!-- Riwayat muncul di sini -->
-                </div>
+        <div id="section-riwayat" class="hidden space-y-4 animate-up">
+            <div class="bg-white rounded-3xl border overflow-hidden shadow-sm">
+                <div id="history-list" class="divide-y divide-slate-100">
+                    </div>
             </div>
         </div>
 
-        <!-- ADMIN PANEL -->
-        <div id="content-admin" class="hidden max-w-2xl mx-auto space-y-8 animate-slide-up">
-            <div class="bg-white p-8 rounded-[40px] shadow-xl shadow-slate-200/50 border border-white">
-                <h2 class="text-sm font-black uppercase tracking-widest text-emerald-600 mb-8 flex items-center gap-2">
-                    <span class="w-8 h-8 bg-emerald-50 flex items-center justify-center rounded-full">📦</span> Tambah Sarpras Baru
-                </h2>
-                <div class="space-y-6">
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase ml-2">Nama Barang</label>
-                        <input type="text" id="add-nama" class="w-full mt-1 p-5 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all font-bold">
-                    </div>
+        <div id="section-admin" class="hidden max-w-2xl mx-auto space-y-6 animate-up">
+            <div class="bg-white p-6 rounded-[32px] border shadow-sm">
+                <h2 class="text-sm font-black mb-6 uppercase text-emerald-600">➕ Tambah Barang Baru</h2>
+                <div class="space-y-4">
+                    <input type="text" id="add-nama" placeholder="Nama Barang" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                     <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="text-[10px] font-black text-slate-400 uppercase ml-2">Stok Awal</label>
-                            <input type="number" id="add-stok" class="w-full mt-1 p-5 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all font-bold">
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-black text-slate-400 uppercase ml-2">Kategori</label>
-                            <select id="add-kategori" class="w-full mt-1 p-5 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-emerald-500 transition-all font-bold appearance-none">
-                                <option>Sarana</option>
-                                <option>Media</option>
-                                <option>Kebersihan</option>
-                                <option>Elektronik</option>
-                            </select>
-                        </div>
+                        <input type="number" id="add-stok" placeholder="Stok" class="p-4 bg-slate-50 border rounded-2xl outline-none">
+                        <select id="add-kategori" class="p-4 bg-slate-50 border rounded-2xl outline-none">
+                            <option>Sarana</option><option>Media</option><option>Perpustakaan</option><option>Kebersihan</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase ml-2">Foto Barang</label>
-                        <div onclick="document.getElementById('file-upload').click()" class="mt-1 aspect-video border-2 border-dashed border-slate-200 rounded-[28px] flex flex-col items-center justify-center bg-slate-50 hover:bg-emerald-50 transition-all cursor-pointer overflow-hidden group">
-                            <img id="preview-img" src="" class="hidden w-full h-full object-cover">
-                            <div id="preview-placeholder" class="text-center">
-                                <span class="text-3xl">📸</span>
-                                <p class="text-[10px] font-extrabold text-slate-400 mt-2 uppercase">Klik untuk upload</p>
-                            </div>
-                        </div>
-                        <input type="file" id="file-upload" class="hidden" accept="image/*" onchange="previewImage(this)">
+                    <div id="photo-preview" class="w-full h-40 border-2 border-dashed rounded-2xl flex items-center justify-center bg-slate-50 cursor-pointer overflow-hidden">
+                        <span class="text-slate-400 text-xs font-bold">KLIK UNTUK UNGGAH FOTO</span>
                     </div>
-                    <button onclick="saveItem()" class="w-full bg-slate-900 text-white py-5 rounded-3xl font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-300 active:scale-95 transition-all">Simpan ke Cloud</button>
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                    <button id="btn-save" class="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase shadow-lg">SIMPAN KE DATABASE</button>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- LOGIN MODAL -->
-    <div id="modal-login" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
-        <div class="bg-white w-full max-w-sm p-10 rounded-[48px] text-center shadow-2xl animate-slide-up">
-            <div class="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center mx-auto mb-6 text-4xl shadow-inner">🔐</div>
-            <h2 class="text-2xl font-black tracking-tight mb-2">Akses Petugas</h2>
-            <p class="text-[11px] font-bold text-slate-400 uppercase mb-10 tracking-widest">Gunakan PIN Default</p>
-            <input type="password" id="pin-input" placeholder="••••" class="w-full p-6 bg-slate-100 rounded-3xl text-center text-4xl tracking-[12px] mb-8 outline-none border-2 border-transparent focus:border-emerald-500 font-mono transition-all">
-            <div class="flex gap-4">
-                <button onclick="closeModal('modal-login')" class="flex-1 py-4 text-slate-400 font-black uppercase text-xs">Batal</button>
-                <button onclick="checkPin()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-emerald-900/20">Masuk</button>
+    <div id="login-modal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+        <div class="bg-white w-full max-w-sm p-8 rounded-[40px] text-center shadow-2xl">
+            <div class="text-4xl mb-4">🔐</div>
+            <h2 class="text-lg font-black mb-8 uppercase">Login Petugas</h2>
+            <input type="password" id="pin-input" placeholder="••••" class="w-full p-5 bg-slate-100 rounded-3xl text-center text-3xl tracking-[12px] mb-8 outline-none border-2 focus:border-emerald-500 font-mono">
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="toggleModal('login-modal')" class="p-4 bg-slate-100 rounded-2xl font-black text-[10px] text-slate-400">BATAL</button>
+                <button onclick="handleLogin()" class="p-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px]">MASUK</button>
             </div>
         </div>
     </div>
 
-    <!-- CART MODAL -->
-    <div id="modal-cart" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-end">
-        <div class="bg-white/90 backdrop-blur-2xl w-full max-w-md h-full p-10 flex flex-col shadow-2xl animate-slide-up">
-            <div class="flex justify-between items-center mb-10">
-                <h2 class="text-3xl font-black tracking-tighter uppercase">Daftar Ambil</h2>
-                <button onclick="closeModal('modal-cart')" class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-xl font-bold">✕</button>
+    <div id="cart-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-end">
+        <div class="bg-white w-full max-w-md h-full p-6 flex flex-col animate-slide-left">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-xl font-black uppercase">📋 Daftar Ambil</h2>
+                <button onclick="toggleModal('cart-modal')" class="text-slate-400 font-bold">✕</button>
             </div>
-            <div id="cart-content" class="flex-grow overflow-y-auto space-y-4 no-scrollbar">
-                <!-- List belanja -->
-            </div>
-            <div class="mt-10 space-y-4 pt-6 border-t border-slate-200">
-                <input type="text" id="borrower-name" placeholder="Nama Pengambil?" class="w-full p-5 bg-white border border-slate-200 rounded-2xl outline-none font-bold text-lg shadow-sm">
-                <button onclick="confirmTransaction()" class="w-full bg-emerald-600 text-white py-6 rounded-[28px] font-black uppercase tracking-widest shadow-2xl active:scale-95 transition-all text-sm">Proses Sekarang</button>
+            <div id="cart-items" class="flex-grow overflow-y-auto space-y-4">
+                </div>
+            <div class="mt-6 border-t pt-6 space-y-4">
+                <input type="text" id="taker-name" placeholder="Siapa yang mengambil?" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold">
+                <button onclick="confirmUsage()" class="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black uppercase shadow-xl">KONFIRMASI SEKARANG</button>
             </div>
         </div>
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, doc, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, runTransaction, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // --- KONFIGURASI FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "MASUKKAN_API_KEY_ANDA",
+            authDomain: "PROYEK-ANDA.firebaseapp.com",
+            projectId: "PROYEK-ANDA",
+            storageBucket: "PROYEK-ANDA.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
+        };
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sarpras-skm-v9-stable';
+        const auth = getAuth(app);
+        const appId = "sarpras-pesantren-skm";
 
-        let state = {
-            inventory: [],
-            history: [],
-            categories: ["Sarana", "Media", "Kebersihan", "Elektronik"],
-            cart: [],
-            isAdmin: false,
-            activeCat: 'Semua',
-            tempImage: ''
-        };
+        // State Global
+        let inventory = [];
+        let cart = [];
+        let isAdmin = false;
+        let base64Photo = "";
 
-        const dbRef = doc(db, 'artifacts', appId, 'public', 'data', 'v9Store');
+        // --- AUTH & LOAD DATA ---
+        signInAnonymously(auth).then(() => {
+            // Load Inventory (Real-time)
+            onSnapshot(query(collection(db, 'artifacts', appId, 'inventory'), orderBy('nama')), (snap) => {
+                inventory = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderKatalog();
+            });
 
-        // FIREBASE LISTENER
-        onSnapshot(dbRef, (snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                state.inventory = data.inventory || [];
-                state.history = data.history || [];
-                state.categories = data.categories || state.categories;
-                renderApp();
-            } else {
-                setDoc(dbRef, { inventory: [], history: [], categories: state.categories });
-            }
+            // Load History (Real-time)
+            onSnapshot(query(collection(db, 'artifacts', appId, 'history'), orderBy('timestamp', 'desc'), limit(50)), (snap) => {
+                const logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderHistory(logs);
+            });
         });
 
-        // CORE RENDERING
-        window.renderApp = () => {
-            renderKatalog();
-            renderCategories();
-            renderHistory();
-            updateCartBadge();
-        };
-
-        window.renderCategories = () => {
-            const list = document.getElementById('category-list');
-            list.innerHTML = '';
-            ['Semua', ...state.categories].forEach(cat => {
-                const isActive = state.activeCat === cat;
-                const btn = document.createElement('button');
-                btn.className = `category-pill px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap border transition-all ${isActive ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-200' : 'bg-white text-slate-400 border-slate-100 hover:border-emerald-200'}`;
-                btn.innerText = cat;
-                btn.onclick = () => { state.activeCat = cat; renderApp(); };
-                list.appendChild(btn);
-            });
-        };
-
+        // --- RENDER FUNCTIONS ---
         window.renderKatalog = () => {
-            const grid = document.getElementById('content-katalog');
+            const container = document.getElementById('section-katalog');
             const search = document.getElementById('search-input').value.toLowerCase();
-            grid.innerHTML = '';
-
-            const filtered = state.inventory.filter(item => 
-                (state.activeCat === 'Semua' || item.kategori === state.activeCat) &&
-                (item.nama.toLowerCase().includes(search))
-            );
-
-            filtered.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'glass rounded-[32px] overflow-hidden flex flex-col item-card border border-white/80 shadow-sm relative';
-                div.innerHTML = `
-                    ${state.isAdmin ? `<button onclick="deleteItem(${item.id})" class="absolute top-3 right-3 z-10 w-9 h-9 bg-red-500 text-white rounded-xl shadow-lg flex items-center justify-center active:scale-90">🗑️</button>` : ''}
-                    <div class="aspect-square bg-slate-200 overflow-hidden">
-                        <img src="${item.foto || 'https://via.placeholder.com/300'}" class="w-full h-full object-cover">
-                    </div>
-                    <div class="p-4 flex flex-col flex-grow">
-                        <span class="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1 opacity-60">${item.kategori}</span>
-                        <h3 class="text-[11px] font-extrabold uppercase leading-tight h-8 mb-2 text-slate-800 line-clamp-2">${item.nama}</h3>
-                        <div class="mt-auto flex justify-between items-center">
-                            <span class="text-[10px] font-black ${item.stok <= 3 ? 'text-red-500 animate-pulse' : 'text-slate-400'} uppercase tracking-tighter">Stok: ${item.stok}</span>
-                        </div>
-                        <button onclick="addToCart(${item.id})" ${item.stok <= 0 ? 'disabled' : ''} class="mt-4 w-full bg-slate-900 text-white py-3 rounded-2xl text-[9px] font-black uppercase tracking-[0.1em] disabled:bg-slate-200 transition-all active:bg-emerald-600">Ambil</button>
-                    </div>
-                `;
-                grid.appendChild(div);
-            });
-        };
-
-        window.renderHistory = () => {
-            const container = document.getElementById('history-container');
-            container.innerHTML = state.history.length ? '' : '<div class="p-20 text-center italic text-slate-300">Belum ada aktivitas pengambilan...</div>';
-            state.history.slice(0, 50).forEach(log => {
-                const div = document.createElement('div');
-                div.className = 'p-5 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors';
-                div.innerHTML = `
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-xl">📦</div>
-                        <div>
-                            <h4 class="text-[11px] font-black uppercase text-slate-800 leading-none mb-1">${log.barang}</h4>
-                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">${log.waktu} • Oleh: <span class="text-emerald-600 font-extrabold">${log.user}</span></p>
-                        </div>
-                    </div>
-                    <span class="bg-red-50 text-red-600 font-black text-xs px-3 py-1.5 rounded-full ring-1 ring-red-100">-${log.qty}</span>
-                `;
-                container.appendChild(div);
-            });
-        };
-
-        // ACTIONS
-        window.switchTab = (tab) => {
-            ['katalog', 'riwayat', 'admin'].forEach(t => document.getElementById('content-'+t).classList.add('hidden'));
-            ['katalog', 'riwayat', 'admin'].forEach(t => {
-                document.getElementById('tab-btn-'+t).classList.replace('border-emerald-600', 'border-transparent');
-                document.getElementById('tab-btn-'+t).classList.replace('text-emerald-800', 'text-slate-400');
-            });
-
-            document.getElementById('content-'+tab).classList.remove('hidden');
-            document.getElementById('tab-btn-'+tab).classList.replace('border-transparent', 'border-emerald-600');
-            document.getElementById('tab-btn-'+tab).classList.replace('text-slate-400', 'text-emerald-800');
-        };
-
-        window.openModal = (id) => {
-            document.getElementById(id).classList.remove('hidden');
-            if(id === 'modal-cart') renderCart();
-        };
-
-        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
-
-        window.checkPin = () => {
-            const pin = document.getElementById('pin-input').value;
-            if(pin === '1234') {
-                state.isAdmin = true;
-                document.getElementById('tab-btn-admin').classList.remove('hidden');
-                document.getElementById('status-label').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span class="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Mode Petugas</span>`;
-                closeModal('modal-login');
-                renderApp();
-            } else { alert('PIN Salah!'); }
-        };
-
-        window.previewImage = (input) => {
-            const file = input.files[0];
-            if(file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        const MAX_W = 500;
-                        const scale = MAX_W / img.width;
-                        canvas.width = MAX_W;
-                        canvas.height = img.height * scale;
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        state.tempImage = canvas.toDataURL('image/jpeg', 0.6);
-                        document.getElementById('preview-img').src = state.tempImage;
-                        document.getElementById('preview-img').classList.remove('hidden');
-                        document.getElementById('preview-placeholder').classList.add('hidden');
-                    };
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-
-        window.saveItem = async () => {
-            const nama = document.getElementById('add-nama').value;
-            const stok = parseInt(document.getElementById('add-stok').value);
-            const kategori = document.getElementById('add-kategori').value;
-            if(!nama || isNaN(stok)) return alert('Lengkapi data!');
-
-            const newItem = { id: Date.now(), nama, stok, kategori, foto: state.tempImage };
-            await updateDoc(dbRef, { inventory: [...state.inventory, newItem] });
             
-            // Reset
-            document.getElementById('add-nama').value = '';
-            document.getElementById('add-stok').value = '';
-            document.getElementById('preview-img').classList.add('hidden');
-            document.getElementById('preview-placeholder').classList.remove('hidden');
-            state.tempImage = '';
-            switchTab('katalog');
+            container.innerHTML = inventory
+                .filter(i => i.nama.toLowerCase().includes(search))
+                .map(item => `
+                    <div class="bg-white rounded-[24px] border overflow-hidden flex flex-col shadow-sm relative group">
+                        ${isAdmin ? `<button onclick="deleteItem('${item.id}')" class="absolute top-2 right-2 z-10 p-2 bg-red-500 text-white rounded-xl">✕</button>` : ''}
+                        <div class="aspect-square bg-slate-50">
+                            <img src="${item.foto || 'https://via.placeholder.com/200'}" class="w-full h-full object-cover">
+                        </div>
+                        <div class="p-3">
+                            <h3 class="text-[11px] font-extrabold uppercase truncate">${item.nama}</h3>
+                            <p class="text-[10px] font-black ${item.stok <= 3 ? 'text-red-500' : 'text-emerald-500'}">STOK: ${item.stok}</p>
+                            <button onclick="addToCart('${item.id}')" ${item.stok <= 0 ? 'disabled' : ''} class="mt-3 w-full bg-slate-900 text-white py-2.5 rounded-xl text-[9px] font-black uppercase disabled:bg-slate-200">PAKAI</button>
+                        </div>
+                    </div>
+                `).join('');
+        };
+
+        function renderHistory(logs) {
+            const container = document.getElementById('history-list');
+            if (logs.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-slate-300 italic text-sm">Belum ada aktivitas.</div>`;
+                return;
+            }
+            container.innerHTML = logs.map(log => `
+                <div class="p-4 flex justify-between items-center">
+                    <div>
+                        <h4 class="text-[11px] font-black text-slate-700 uppercase">${log.nama}</h4>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase">${log.tgl} • Oleh: ${log.user}</p>
+                    </div>
+                    <span class="bg-red-50 text-red-600 font-black text-xs px-3 py-1 rounded-full">-${log.qty}</span>
+                </div>
+            `).join('');
+        }
+
+        // --- CORE LOGIC ---
+        window.addToCart = (id) => {
+            const item = inventory.find(i => i.id === id);
+            const inCart = cart.find(c => c.id === id);
+            if (inCart) {
+                if (inCart.qty < item.stok) inCart.qty++;
+            } else {
+                cart.push({ ...item, qty: 1 });
+            }
+            updateCartUI();
+        };
+
+        function updateCartUI() {
+            const count = cart.reduce((acc, curr) => acc + curr.qty, 0);
+            const badge = document.getElementById('cart-count');
+            badge.innerText = count;
+            badge.classList.toggle('hidden', count === 0);
+            
+            document.getElementById('cart-items').innerHTML = cart.map((item, idx) => `
+                <div class="flex items-center gap-4 bg-slate-50 p-4 rounded-[24px] border border-slate-100">
+                    <div class="flex-grow">
+                        <h4 class="text-[11px] font-black uppercase">${item.nama}</h4>
+                        <p class="text-[10px] font-bold text-emerald-600">JUMLAH: ${item.qty}</p>
+                    </div>
+                    <button onclick="removeFromCart(${idx})" class="w-8 h-8 bg-white border rounded-lg font-bold">-</button>
+                </div>
+            `).join('');
+        }
+
+        window.removeFromCart = (idx) => {
+            if (cart[idx].qty > 1) cart[idx].qty--;
+            else cart.splice(idx, 1);
+            updateCartUI();
+        };
+
+        window.confirmUsage = async () => {
+            const name = document.getElementById('taker-name').value;
+            if (!name || cart.length === 0) return alert("Isi nama dan pilih barang!");
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    for (const item of cart) {
+                        const ref = doc(db, 'artifacts', appId, 'inventory', item.id);
+                        const snap = await transaction.get(ref);
+                        const newStok = snap.data().stok - item.qty;
+                        if (newStok < 0) throw "Stok tidak cukup!";
+                        
+                        transaction.update(ref, { stok: newStok });
+                        const histRef = doc(collection(db, 'artifacts', appId, 'history'));
+                        transaction.set(histRef, {
+                            nama: item.nama, qty: item.qty, user: name,
+                            timestamp: serverTimestamp(), tgl: new Date().toLocaleString('id-ID')
+                        });
+                    }
+                });
+                cart = [];
+                updateCartUI();
+                toggleModal('cart-modal');
+                alert("Berhasil dicatat!");
+            } catch (e) { alert(e); }
+        };
+
+        // --- ADMIN FUNCTIONS ---
+        window.handleLogin = () => {
+            const pin = document.getElementById('pin-input').value;
+            if (pin === "1234") {
+                isAdmin = true;
+                document.getElementById('tab-admin').classList.remove('hidden');
+                document.getElementById('admin-status').innerText = "🟢 MODE PETUGAS (CLOUD)";
+                toggleModal('login-modal');
+                renderKatalog();
+            } else { alert("PIN Salah!"); }
         };
 
         window.deleteItem = async (id) => {
-            if(confirm('Hapus barang ini dari Cloud?')) {
-                const filtered = state.inventory.filter(i => i.id !== id);
-                await updateDoc(dbRef, { inventory: filtered });
-            }
+            if (confirm("Hapus barang?")) await deleteDoc(doc(db, 'artifacts', appId, 'inventory', id));
         };
 
-        window.addToCart = (id) => {
-            const item = state.inventory.find(i => i.id === id);
-            const inCart = state.cart.find(c => c.id === id);
-            if(inCart) {
-                if(inCart.qty < item.stok) inCart.qty++;
-            } else {
-                state.cart.push({...item, qty: 1});
-            }
-            updateCartBadge();
-        };
-
-        window.updateCartBadge = () => {
-            const badge = document.getElementById('cart-count');
-            badge.innerText = state.cart.length;
-            badge.classList.toggle('hidden', state.cart.length === 0);
-        };
-
-        window.renderCart = () => {
-            const cont = document.getElementById('cart-content');
-            cont.innerHTML = state.cart.length ? '' : '<div class="p-10 text-center italic text-slate-400">Keranjang masih kosong...</div>';
-            state.cart.forEach((c, idx) => {
-                cont.innerHTML += `
-                    <div class="flex items-center gap-5 bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                        <img src="${c.foto || ''}" class="w-16 h-16 rounded-2xl object-cover bg-slate-100">
-                        <div class="flex-grow">
-                            <h4 class="text-xs font-black uppercase truncate w-32">${c.nama}</h4>
-                            <p class="text-[11px] font-bold text-emerald-600 mt-1">Jumlah: ${c.qty}</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="updateQty(${idx}, -1)" class="w-10 h-10 bg-slate-50 border rounded-xl font-bold active:bg-white">-</button>
-                            <button onclick="updateQty(${idx}, 1)" class="w-10 h-10 bg-slate-50 border rounded-xl font-bold active:bg-white">+</button>
-                        </div>
-                    </div>
-                `;
+        document.getElementById('btn-save').onclick = async () => {
+            const nama = document.getElementById('add-nama').value;
+            const stok = document.getElementById('add-stok').value;
+            const kategori = document.getElementById('add-kategori').value;
+            
+            if (!nama || !stok) return alert("Lengkapi data!");
+            
+            await addDoc(collection(db, 'artifacts', appId, 'inventory'), {
+                nama, kategori, stok: parseInt(stok), foto: base64Photo, createdAt: serverTimestamp()
             });
+            
+            document.getElementById('add-nama').value = "";
+            document.getElementById('add-stok').value = "";
+            base64Photo = "";
+            document.getElementById('photo-preview').innerHTML = `<span class="text-slate-400 text-xs font-bold">KLIK UNTUK UNGGAH FOTO</span>`;
+            switchTab('katalog');
         };
-
-        window.updateQty = (idx, delta) => {
-            const c = state.cart[idx];
-            const original = state.inventory.find(i => i.id === c.id);
-            c.qty += delta;
-            if(c.qty <= 0) state.cart.splice(idx, 1);
-            else if(c.qty > original.stok) c.qty = original.stok;
-            renderCart();
-            updateCartBadge();
-        };
-
-        window.confirmTransaction = async () => {
-            const user = document.getElementById('borrower-name').value;
-            if(!user || !state.cart.length) return alert('Lengkapi nama & barang!');
-
-            const newInv = [...state.inventory];
-            const logs = [];
-
-            state.cart.forEach(c => {
-                const idx = newInv.findIndex(i => i.id === c.id);
-                newInv[idx].stok -= c.qty;
-                logs.push({
-                    barang: c.nama,
-                    qty: c.qty,
-                    user: user,
-                    waktu: new Date().toLocaleString('id-ID', {hour12: false})
-                });
-            });
-
-            await updateDoc(dbRef, { 
-                inventory: newInv, 
-                history: [...logs, ...state.history].slice(0, 100) 
-            });
-
-            state.cart = [];
-            document.getElementById('borrower-name').value = '';
-            closeModal('modal-cart');
-            alert('Data berhasil dicatat!');
-        };
-        
-        // GLOBAL SEARCH HANDLER
-        window.refreshKatalog = () => renderKatalog();
-
-    </script>
-</body>
-</html>
-
