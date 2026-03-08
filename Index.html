@@ -1,291 +1,411 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SARPRAS SKM V11</title>
-    <!-- Script Inti -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; margin: 0; }
-        .shopee-color { background-color: #ee4d2d; }
-        .shopee-text { color: #ee4d2d; }
-        .card-shadow { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        #loader {
-            position: fixed; inset: 0; background: white; z-index: 9999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .animate-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
-</head>
-<body>
-    <!-- Indikator Loading agar tidak Blank Putih -->
-    <div id="loader">
-        <div class="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-xs font-bold text-slate-400 tracking-widest uppercase">Memuat Gudang SKM...</p>
-    </div>
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 
-    <div id="root"></div>
+// --- Konfigurasi Firebase ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'sarpras-pesantren-skm';
 
-    <!-- Library React -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [inventory, setInventory] = useState([]);
+  const [categories, setCategories] = useState(["Sarana", "Media", "Perpustakaan", "Kebersihan"]);
+  const [history, setHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState('katalog');
+  const [activeCat, setActiveCat] = useState('Semua');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [cart, setCart] = useState([]);
+  const [isLoginModal, setIsLoginModal] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Form State
+  const [newItem, setNewItem] = useState({ nama: '', stok: '', kategori: 'Sarana', foto: '' });
+  const [newCat, setNewCat] = useState("");
+  const [userName, setUserName] = useState("");
+  const [pin, setPin] = useState("");
+  const fileInputRef = useRef(null);
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+  // --- Auth & Data Fetching ---
+  useEffect(() => {
+    const initAuth = async () => {
+      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        await signInWithCustomToken(auth, __initial_auth_token);
+      } else {
+        await signInAnonymously(auth);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
 
-        // Firebase - Menggunakan versi yang lebih stabil
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+  useEffect(() => {
+    if (!user) return;
 
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sarpras-skm-v11';
+    const dataDoc = doc(db, 'artifacts', appId, 'public', 'mainData');
+    const unsubData = onSnapshot(dataDoc, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setInventory(data.inventory || []);
+        setCategories(data.categories || ["Sarana", "Media", "Perpustakaan", "Kebersihan"]);
+      } else {
+        setDoc(dataDoc, { inventory: [], categories: ["Sarana", "Media", "Perpustakaan", "Kebersihan"] });
+      }
+    }, (err) => console.error("Firestore Error:", err));
 
-        function App() {
-            const [inventory, setInventory] = useState([]);
-            const [logs, setLogs] = useState([]);
-            const [cart, setCart] = useState([]);
-            const [view, setView] = useState('katalog');
-            const [search, setSearch] = useState("");
-            const [isAdmin, setIsAdmin] = useState(false);
-            const [showCart, setShowCart] = useState(false);
-            const [showLogin, setShowLogin] = useState(false);
-            const [userForm, setUserForm] = useState("");
-            const [pinInput, setPinInput] = useState("");
+    const historyDoc = doc(db, 'artifacts', appId, 'public', 'usageHistory');
+    const unsubHist = onSnapshot(historyDoc, (docSnap) => {
+      if (docSnap.exists()) {
+        setHistory(docSnap.data().logs || []);
+      } else {
+        setDoc(historyDoc, { logs: [] });
+      }
+    }, (err) => console.error("Firestore Error:", err));
 
-            useEffect(() => {
-                const init = async () => {
-                    await signInAnonymously(auth);
-                    
-                    // Pantau Stok Barang
-                    onSnapshot(doc(db, 'artifacts', appId, 'public', 'stok'), (snap) => {
-                        if (snap.exists()) setInventory(snap.data().items || []);
-                        else setDoc(doc(db, 'artifacts', appId, 'public', 'stok'), { items: [] });
-                        document.getElementById('loader').style.display = 'none';
-                    });
+    return () => {
+      unsubData();
+      unsubHist();
+    };
+  }, [user]);
 
-                    // Pantau Laporan
-                    onSnapshot(doc(db, 'artifacts', appId, 'public', 'laporan'), (snap) => {
-                        if (snap.exists()) setLogs(snap.data().logs || []);
-                        else setDoc(doc(db, 'artifacts', appId, 'public', 'laporan'), { logs: [] });
-                    });
-                };
-                init();
-            }, []);
+  // --- Logic Functions ---
+  const handleAddItem = async () => {
+    if (!newItem.nama || !newItem.stok) return;
+    const updatedInv = [...inventory, { ...newItem, id: Date.now(), stok: parseInt(newItem.stok) }];
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { inventory: updatedInv });
+    setNewItem({ nama: '', stok: '', kategori: categories[0], foto: '' });
+    setActiveTab('katalog');
+  };
 
-            const addToCart = (item) => {
-                if (item.stok <= 0) return alert("Stok Habis!");
-                const exist = cart.find(c => c.id === item.id);
-                if (exist) {
-                    if (exist.qty >= item.stok) return alert("Stok tidak cukup!");
-                    setCart(cart.map(c => c.id === item.id ? {...c, qty: c.qty + 1} : c));
-                } else {
-                    setCart([...cart, {...item, qty: 1}]);
-                }
-            };
+  const handleDeleteItem = async (itemId) => {
+    // Konfirmasi hapus sederhana menggunakan state atau konfirmasi internal
+    const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus barang ini secara permanen dari Cloud?");
+    if (confirmDelete) {
+      const updatedInv = inventory.filter(item => item.id !== itemId);
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { inventory: updatedInv });
+    }
+  };
 
-            const checkout = async () => {
-                if (!userForm) return alert("Harap isi nama pengambil!");
-                if (cart.length === 0) return;
+  const handleAddCategory = async () => {
+    if (!newCat || categories.includes(newCat)) return;
+    const updatedCats = [...categories, newCat];
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { categories: updatedCats });
+    setNewCat("");
+  };
 
-                let currentInv = [...inventory];
-                let newLogs = [];
+  const handleUsage = async () => {
+    if (!userName || cart.length === 0) return;
+    
+    let updatedInv = [...inventory];
+    let logs = [];
 
-                cart.forEach(c => {
-                    const idx = currentInv.findIndex(i => i.id === c.id);
-                    if (idx !== -1) {
-                        currentInv[idx].stok -= c.qty;
-                        newLogs.push({
-                            id: Date.now() + Math.random(),
-                            barang: c.nama,
-                            qty: c.qty,
-                            oleh: userForm,
-                            waktu: new Date().toLocaleString('id-ID')
-                        });
-                    }
-                });
+    cart.forEach(item => {
+      const idx = updatedInv.findIndex(i => i.id === item.id);
+      if (idx !== -1) {
+        updatedInv[idx].stok -= item.qty;
+        logs.push({
+          id: Date.now() + Math.random(),
+          tgl: new Date().toLocaleString('id-ID'),
+          nama: item.nama,
+          qty: item.qty,
+          user: userName
+        });
+      }
+    });
 
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'stok'), { items: currentInv });
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'laporan'), { logs: [...newLogs, ...logs].slice(0, 100) });
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'mainData'), { inventory: updatedInv });
+    const histDoc = doc(db, 'artifacts', appId, 'public', 'usageHistory');
+    const snap = await getDoc(histDoc);
+    const currentHist = snap.data()?.logs || [];
+    await updateDoc(histDoc, { logs: [...logs, ...currentHist].slice(0, 100) });
+
+    setCart([]);
+    setUserName("");
+    setIsCartOpen(false);
+  };
+
+  const processImage = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.src = ev.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const scale = 300 / Math.max(img.width, img.height);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          setNewItem({ ...newItem, foto: canvas.toDataURL('image/jpeg', 0.7) });
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const filteredInv = inventory.filter(i => 
+    (activeCat === 'Semua' || i.kategori === activeCat) &&
+    (i.nama.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-20 font-sans">
+      {/* Header */}
+      <header className="bg-white border-b sticky top-0 z-40 px-4 py-4 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-xl font-black text-emerald-700 tracking-tighter flex items-center gap-2">
+              <span className="bg-emerald-100 p-1.5 rounded-lg text-lg">🏪</span> SARPRAS SKM
+            </h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+              {isAdmin ? "🟢 MODE PETUGAS (CLOUD)" : "⚪ MODE TAMU (LIHAT SAJA)"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setIsLoginModal(true)} className={`p-2.5 rounded-2xl transition ${isAdmin ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            </button>
+            <button onClick={() => setIsCartOpen(true)} className="relative p-2.5 bg-emerald-600 text-white rounded-2xl shadow-lg">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">{cart.length}</span>}
+            </button>
+          </div>
+        </div>
+
+        <input 
+          type="text" 
+          placeholder="Cari alat atau bahan..." 
+          className="w-full p-3.5 bg-slate-100 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition border-none"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        
+        <div className="flex gap-2 overflow-x-auto no-scrollbar py-3 mt-1">
+          {["Semua", ...categories].map(c => (
+            <button 
+              key={c}
+              onClick={() => setActiveCat(c)}
+              className={`px-5 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition ${activeCat === c ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border text-slate-400'}`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <nav className="flex px-4 bg-white border-b text-[11px] font-black uppercase tracking-[0.1em]">
+        <button onClick={() => setActiveTab('katalog')} className={`flex-1 py-4 border-b-4 transition ${activeTab === 'katalog' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-300'}`}>📦 Katalog</button>
+        <button onClick={() => setActiveTab('riwayat')} className={`flex-1 py-4 border-b-4 transition ${activeTab === 'riwayat' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-300'}`}>📜 Riwayat</button>
+        {isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex-1 py-4 border-b-4 transition ${activeTab === 'admin' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-300'}`}>➕ Kelola</button>}
+      </nav>
+
+      {/* Main Content */}
+      <main className="p-4 max-w-5xl mx-auto">
+        {activeTab === 'katalog' && (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {filteredInv.map(item => (
+              <div key={item.id} className="bg-white rounded-[24px] border overflow-hidden flex flex-col shadow-sm relative group">
+                {/* TOMBOL HAPUS (Hanya muncul jika Admin) */}
+                {isAdmin && (
+                  <button 
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="absolute top-2 right-2 z-10 p-2 bg-red-500 text-white rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                )}
                 
-                setCart([]);
-                setUserForm("");
-                setShowCart(false);
-                alert("Laporan Terkirim & Stok Gudang Berkurang!");
-            };
-
-            return (
-                <div className="max-w-md mx-auto min-h-screen bg-slate-50 relative flex flex-col">
-                    {/* Top Header */}
-                    <header className="shopee-color p-5 pt-8 pb-14 rounded-b-[40px] shadow-lg sticky top-0 z-40">
-                        <div className="flex justify-between items-center text-white mb-6 px-2">
-                            <div>
-                                <h1 className="text-xl font-extrabold tracking-tighter">SARPRAS SKM</h1>
-                                <p className="text-[10px] font-bold opacity-70 uppercase tracking-[2px]">{isAdmin ? "Petugas Gudang" : "Mode Tamu"}</p>
-                            </div>
-                            <div className="flex gap-4">
-                                <button onClick={() => setShowLogin(true)} className="text-xl">⚙️</button>
-                                <div className="relative" onClick={() => setShowCart(true)}>
-                                    <span className="text-2xl cursor-pointer">🛒</span>
-                                    {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-white text-orange-600 text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-orange-600">{cart.length}</span>}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="px-2">
-                            <input 
-                                type="text" 
-                                placeholder="Cari kebutuhan sarana..." 
-                                className="w-full p-4 rounded-2xl outline-none shadow-inner text-sm font-bold"
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-                    </header>
-
-                    {/* Navbar */}
-                    <nav className="flex bg-white mx-8 -mt-6 rounded-2xl shadow-md border border-slate-100 overflow-hidden z-40">
-                        <button onClick={() => setView('katalog')} className={`flex-1 py-4 text-[10px] font-black uppercase ${view === 'katalog' ? 'text-orange-600 border-b-4 border-orange-600' : 'text-slate-300'}`}>Katalog</button>
-                        <button onClick={() => setView('laporan')} className={`flex-1 py-4 text-[10px] font-black uppercase ${view === 'laporan' ? 'text-orange-600 border-b-4 border-orange-600' : 'text-slate-300'}`}>Laporan</button>
-                        {isAdmin && <button onClick={() => setView('admin')} className={`flex-1 py-4 text-[10px] font-black uppercase ${view === 'admin' ? 'text-orange-600 border-b-4 border-orange-600' : 'text-slate-300'}`}>Admin</button>}
-                    </nav>
-
-                    {/* Main Content */}
-                    <main className="p-4 flex-grow">
-                        {view === 'katalog' && (
-                            <div className="grid grid-cols-2 gap-3 animate-in">
-                                {inventory.filter(i => i.nama.toLowerCase().includes(search.toLowerCase())).map(item => (
-                                    <div key={item.id} className="bg-white rounded-3xl overflow-hidden card-shadow flex flex-col h-full border border-slate-50">
-                                        <div className="aspect-square bg-slate-100 relative">
-                                            <img src={item.foto || 'https://via.placeholder.com/200'} className="w-full h-full object-cover" />
-                                            {item.stok <= 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-black text-[10px] uppercase">Habis</div>}
-                                        </div>
-                                        <div className="p-3 flex flex-col flex-grow">
-                                            <h3 className="text-[11px] font-bold text-slate-800 line-clamp-2 h-7 mb-2 uppercase leading-tight">{item.nama}</h3>
-                                            <p className="text-orange-600 font-black text-[10px] mb-3 italic">Stok: {item.stok}</p>
-                                            <button 
-                                                onClick={() => addToCart(item)}
-                                                disabled={item.stok <= 0}
-                                                className="w-full py-2 rounded-xl shopee-color text-white text-[9px] font-black uppercase tracking-widest active:scale-95 disabled:bg-slate-200"
-                                            >+ Keranjang</button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {view === 'laporan' && (
-                            <div className="space-y-3 animate-in">
-                                {logs.map(log => (
-                                    <div key={log.id} className="bg-white p-4 rounded-2xl card-shadow border-l-4 border-orange-600 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase text-slate-700">{log.barang}</p>
-                                            <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase">{log.waktu} • {log.oleh}</p>
-                                        </div>
-                                        <span className="text-red-500 font-black text-xs">-{log.qty}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {view === 'admin' && (
-                            <div className="bg-white p-6 rounded-3xl card-shadow space-y-4 animate-in">
-                                <h2 className="text-xs font-black shopee-text uppercase italic mb-2 tracking-widest">Input Barang Baru</h2>
-                                <input type="text" id="n" placeholder="Nama Barang" className="w-full p-4 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
-                                <input type="number" id="s" placeholder="Stok" className="w-full p-4 bg-slate-50 rounded-xl outline-none font-bold text-sm" />
-                                <input type="file" id="f" className="text-[10px]" accept="image/*" />
-                                <button onClick={() => {
-                                    const nm = document.getElementById('n').value;
-                                    const st = document.getElementById('s').value;
-                                    const fl = document.getElementById('f').files[0];
-                                    if(!nm || !st) return alert("Isi data!");
-                                    
-                                    const save = (foto) => {
-                                        const items = [...inventory, { id: Date.now(), nama: nm, stok: parseInt(st), foto }];
-                                        updateDoc(doc(db, 'artifacts', appId, 'public', 'stok'), { items });
-                                        setView('katalog');
-                                    };
-
-                                    if(fl) {
-                                        const r = new FileReader();
-                                        r.onload = (e) => save(e.target.result);
-                                        r.readAsDataURL(fl);
-                                    } else save("");
-                                }} className="w-full p-4 shopee-color text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg">Simpan Stok</button>
-                            </div>
-                        )}
-                    </main>
-
-                    {/* Modal Login */}
-                    {showLogin && (
-                        <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-8 backdrop-blur-sm">
-                            <div className="bg-white w-full rounded-[40px] p-8 text-center animate-in">
-                                <h2 className="font-black shopee-text uppercase mb-6 italic tracking-widest">Akses Petugas</h2>
-                                <input type="password" placeholder="••••" className="w-full p-5 bg-slate-100 rounded-2xl text-center text-2xl tracking-[10px] mb-8 outline-none border-2 focus:border-orange-500" onChange={e => setPinInput(e.target.value)} />
-                                <div className="flex gap-4">
-                                    <button onClick={() => setShowLogin(false)} className="flex-1 text-slate-400 font-bold uppercase text-[10px]">Batal</button>
-                                    <button onClick={() => {
-                                        if(pinInput === "1234") { setIsAdmin(true); setShowLogin(false); setView('admin'); }
-                                        else alert("PIN Salah!");
-                                    }} className="flex-1 p-4 shopee-color text-white rounded-xl font-black uppercase text-[10px]">Masuk</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Cart Drawer */}
-                    {showCart && (
-                        <div className="fixed inset-0 bg-black/60 z-[100] flex justify-end">
-                            <div className="bg-white w-full max-w-xs h-full flex flex-col p-6 shadow-2xl animate-in">
-                                <div className="flex justify-between items-center mb-10">
-                                    <h2 className="text-xl font-black italic shopee-text tracking-tighter uppercase">Keranjang Pakai</h2>
-                                    <button onClick={() => setShowCart(false)} className="text-2xl">✕</button>
-                                </div>
-                                <div className="flex-grow overflow-y-auto space-y-3 pr-2">
-                                    {cart.map(c => (
-                                        <div key={c.id} className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                            <div className="flex-grow">
-                                                <p className="text-[10px] font-black uppercase truncate w-32 leading-none">{c.nama}</p>
-                                                <div className="flex items-center gap-3 mt-3">
-                                                    <button onClick={() => {
-                                                        const n = [...cart];
-                                                        const i = n.findIndex(x => x.id === c.id);
-                                                        if(n[i].qty > 1) n[i].qty--; else n.splice(i,1);
-                                                        setCart(n);
-                                                    }} className="w-7 h-7 bg-white border rounded-lg flex items-center justify-center font-bold text-xs">-</button>
-                                                    <span className="text-xs font-black">{c.qty}</span>
-                                                    <button onClick={() => {
-                                                        const n = [...cart];
-                                                        const i = n.findIndex(x => x.id === c.id);
-                                                        const ori = inventory.find(x => x.id === c.id);
-                                                        if(n[i].qty < ori.stok) n[i].qty++;
-                                                        setCart(n);
-                                                    }} className="w-7 h-7 bg-white border rounded-lg flex items-center justify-center font-bold text-xs">+</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {cart.length === 0 && <p className="text-center py-20 text-xs font-bold text-slate-300 italic uppercase">Keranjang Kosong</p>}
-                                </div>
-                                <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
-                                    <input type="text" placeholder="Tulis Nama Anda..." className="w-full p-4 bg-slate-50 rounded-xl outline-none font-bold text-xs" value={userForm} onChange={e => setUserForm(e.target.value)} />
-                                    <button onClick={checkout} disabled={cart.length === 0} className="w-full p-5 shopee-color text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">Kirim Laporan</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                <div className="aspect-square bg-slate-50 relative">
+                  <span className="absolute top-2 left-2 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg text-[9px] font-black text-emerald-700 shadow-sm border uppercase">{item.kategori}</span>
+                  <img src={item.foto || 'https://via.placeholder.com/200?text=Barang'} className="w-full h-full object-cover" />
                 </div>
-            );
-        }
+                <div className="p-3 flex flex-col flex-grow">
+                  <h3 className="text-[11px] font-extrabold uppercase line-clamp-2 h-7 mb-1 text-slate-700 tracking-tight">{item.nama}</h3>
+                  <p className={`text-[10px] font-black ${item.stok <= 3 ? 'text-red-500' : 'text-emerald-500'}`}>STOK: {item.stok}</p>
+                  <button 
+                    disabled={item.stok <= 0}
+                    onClick={() => {
+                      const existing = cart.find(c => c.id === item.id);
+                      if (existing) {
+                        setCart(cart.map(c => c.id === item.id ? {...c, qty: c.qty + 1} : c));
+                      } else {
+                        setCart([...cart, {...item, qty: 1}]);
+                      }
+                    }}
+                    className="mt-3 w-full bg-slate-900 text-white py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest disabled:bg-slate-200"
+                  >
+                    PAKAI
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        const r = ReactDOM.createRoot(document.getElementById('root'));
-        r.render(<App />);
-    </script>
-</body>
-</html>
+        {activeTab === 'riwayat' && (
+          <div className="bg-white rounded-3xl border overflow-hidden shadow-sm">
+            <div className="p-4 bg-slate-50 border-b">
+              <h2 className="text-xs font-black uppercase tracking-widest">Aktivitas Cloud Terkini</h2>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {history.length === 0 && <div className="p-10 text-center text-slate-300 italic text-sm">Belum ada aktivitas tercatat.</div>}
+              {history.map(log => (
+                <div key={log.id} className="p-4 flex justify-between items-center">
+                  <div>
+                    <h4 className="text-[11px] font-black text-slate-700 uppercase">{log.nama}</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase">{log.tgl} • Oleh: {log.user}</p>
+                  </div>
+                  <span className="bg-red-50 text-red-600 font-black text-xs px-3 py-1 rounded-full">-{log.qty}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'admin' && (
+          <div className="space-y-6 max-w-2xl mx-auto animate-up">
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm">
+              <h2 className="text-sm font-black mb-6 uppercase tracking-widest text-emerald-600 flex items-center gap-2">
+                <span>➕</span> Tambah Barang Ke Cloud
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Nama Barang</label>
+                    <input type="text" value={newItem.nama} onChange={e => setNewItem({...newItem, nama: e.target.value})} className="w-full mt-1 p-3.5 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm" placeholder="Contoh: Lampu LED 10W" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Stok Awal</label>
+                      <input type="number" value={newItem.stok} onChange={e => setNewItem({...newItem, stok: e.target.value})} className="w-full mt-1 p-3.5 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Kategori</label>
+                      <select value={newItem.kategori} onChange={e => setNewItem({...newItem, kategori: e.target.value})} className="w-full mt-1 p-3.5 bg-slate-50 border rounded-2xl outline-none text-sm appearance-none bg-white">
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Unggah Foto</label>
+                  <div onClick={() => fileInputRef.current.click()} className="flex-grow min-h-[140px] border-2 border-dashed rounded-[24px] flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-emerald-50 transition overflow-hidden border-slate-200">
+                    {newItem.foto ? <img src={newItem.foto} className="w-full h-full object-cover" /> : <div className="text-center"><span className="text-2xl opacity-30">📷</span><p className="text-[9px] font-bold text-slate-400 mt-2">KLIK UNTUK FOTO</p></div>}
+                  </div>
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={processImage} />
+                </div>
+              </div>
+              <button onClick={handleAddItem} className="w-full mt-6 bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-emerald-100 active:scale-95 transition">SIMPAN KE DATABASE</button>
+            </div>
+
+            <div className="bg-white p-6 rounded-[32px] border shadow-sm">
+              <h2 className="text-sm font-black mb-4 uppercase tracking-widest text-indigo-600">Tambah Kategori Baru</h2>
+              <div className="flex gap-2">
+                <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Misal: Alat Listrik" className="flex-grow p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm" />
+                <button onClick={handleAddCategory} className="px-6 bg-indigo-600 text-white font-bold rounded-2xl">Tambah</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Cart Modal */}
+      {isCartOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-end">
+          <div className="bg-white w-full max-w-md h-full p-6 flex flex-col shadow-2xl animate-slide-left">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl font-black tracking-tighter uppercase">📋 Daftar Pengambilan</h2>
+              <button onClick={() => setIsCartOpen(false)} className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-full text-slate-400 font-bold hover:bg-red-50 hover:text-red-500 transition">✕</button>
+            </div>
+            <div className="flex-grow overflow-y-auto space-y-4 no-scrollbar">
+              {cart.length === 0 && <p className="text-center text-slate-300 italic text-sm mt-10">Daftar kosong...</p>}
+              {cart.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-4 bg-slate-50 p-4 rounded-[24px] border border-slate-100">
+                  <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border shrink-0">
+                    <img src={item.foto || 'https://via.placeholder.com/100'} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-grow">
+                    <h4 className="text-[11px] font-black uppercase leading-tight truncate w-32">{item.nama}</h4>
+                    <p className="text-[10px] font-bold text-emerald-600">JUMLAH: {item.qty}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => {
+                      const updated = [...cart];
+                      if (updated[idx].qty > 1) updated[idx].qty--;
+                      else updated.splice(idx, 1);
+                      setCart(updated);
+                    }} className="w-8 h-8 bg-white border rounded-lg font-bold hover:bg-red-50">-</button>
+                    <button onClick={() => {
+                      const updated = [...cart];
+                      const inv = inventory.find(i => i.id === item.id);
+                      if (updated[idx].qty < inv.stok) updated[idx].qty++;
+                      setCart(updated);
+                    }} className="w-8 h-8 bg-white border rounded-lg font-bold hover:bg-emerald-50">+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 border-t pt-6 space-y-4">
+              <input 
+                type="text" 
+                placeholder="Siapa yang mengambil?" 
+                className="w-full p-4 bg-slate-100 border-none rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-bold"
+                value={userName}
+                onChange={e => setUserName(e.target.value)}
+              />
+              <button onClick={handleUsage} className="w-full bg-emerald-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl active:scale-95 transition">KONFIRMASI SEKARANG</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Modal */}
+      {isLoginModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-6">
+          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] text-center shadow-2xl border border-white/20">
+            <div className="text-4xl mb-4">🔐</div>
+            <h2 className="text-lg font-black mb-1 uppercase tracking-tight">Login Petugas</h2>
+            <p className="text-[10px] text-slate-400 mb-8 font-bold uppercase tracking-widest">Masukkan PIN untuk membuka fitur kelola</p>
+            <input 
+              type="password" 
+              placeholder="••••" 
+              className="w-full p-5 bg-slate-100 rounded-3xl text-center text-3xl tracking-[12px] mb-8 outline-none border-2 border-transparent focus:border-emerald-500 transition font-mono"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setIsLoginModal(false)} className="p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-slate-200">BATAL</button>
+              <button onClick={() => {
+                if (pin === "1234") {
+                  setIsAdmin(true);
+                  setIsLoginModal(false);
+                  setPin("");
+                } else {
+                  alert("PIN SALAH!");
+                }
+              }} className="p-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-emerald-900/20">MASUK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes slide-left { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        .animate-slide-left { animation: slide-left 0.3s ease-out; }
+        @keyframes up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-up { animation: up 0.4s ease-out; }
+      `}</style>
+    </div>
+  );
+}
 
